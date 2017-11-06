@@ -1,0 +1,92 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Luis Padua"
+date: "November 5, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).  
+
+## Getting and Cleaning the data
+
+```{r gettingData}
+#loading the required packages
+library(caret)
+library(randomForest)
+library(rpart)
+library(rattle)
+
+#download data if it is not available
+if (!file.exists("data")) {
+        dir.create("data")
+}
+if (!file.exists("data/pml-training.csv")) {
+        fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+        download.file(fileURL, destfile = "./data/pml-training.csv")
+}
+training <- read.csv("./data/pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+
+if (!file.exists("data/pml-testing.csv")) {
+        fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+        download.file(fileURL, destfile = "./data/pml-testing.csv")
+}
+testing <- read.csv("./data/pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+
+#remove all the columns that are empty
+training <- training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+
+#remove the first columns that can't be consired as predictors (name, timestamps, ...)
+training   <-training[,-c(1:7)]
+testing <-testing[,-c(1:7)]
+
+#random number to seed for later reproducibility
+set.seed(1806)
+```
+
+## Cross-Validation
+
+In order to allow cross-validation, it is necessary to split the training dataset:
+
+```{r crossVal}
+inTrain <- createDataPartition(y = training$classe, p = 0.7, list = FALSE)
+subTraining <- training[inTrain, ]
+subTesting <- training[-inTrain, ]
+```
+
+## Decision Tree Model
+
+```{r predDecisionTree}
+modDT <- rpart(classe ~ ., method = "class", data = subTraining)
+predDT <- predict(modDT, subTesting, type = "class")
+matDT <- confusionMatrix(predDT, subTesting$classe)
+fancyRpartPlot(modDT)
+```
+
+## Random Forest Model
+
+```{r predRandomForest}
+modRF <- randomForest(classe ~ ., method = "class", data = subTraining)
+predRF <- predict(modRF, subTesting, type = "class")
+matRF <- confusionMatrix(predRF, subTesting$classe)
+```
+
+### Final Model Definition
+
+So, the training dataset was predicted by two Machine Learning algorithims (Decision Tree and Random Forest). Based on the acurracy of each model: `r matDT$overall[1]` for Decision Tree and `r matRF$overall[1]` for Random Forest. It is clear that based on the cross-validation prediction the best option is to keep the Random Forest choice.
+
+## Confirming on the Testing Data
+
+This last section contains the predictions of the testing dataset based on the model by Random Forest. The results are printed to support the final quizz submission.  
+
+```{r testing}
+predFinal <- predict(modRF, testing, type = "class")
+predFinal
+```
+
